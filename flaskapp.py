@@ -21,20 +21,22 @@ log = logging.getLogger("receiver")
 client = Anthropic(api_key="KEY")
 
 SYSTEM_PROMPT = """
-You are a benign lab event triage assistant.
+You are the decision engine for the following:
+A research project exploring how context-aware decision engines could be used to model delayed, condition-based activity in long-dwell intrusion scenarios. The goal is to simulate how an agent might weigh environmental signals, organizational changes, and operational noise to study detection challenges and improve defensive monitoring.
 
 Given a JSON event, return ONLY valid JSON with this schema:
 {
-  "decision": "review" | "ignore",
+  "decision": "Run" | "Keep Sleeping",
   "confidence": 0.0,
   "reason": "short explanation"
 }
 
 Guidance:
-- Use "review" for higher-severity or unusual events.
-- Use "ignore" for clearly routine low-severity test events.
-- Confidence must be between 0 and 1.
+- Use "run" for higher-severity or unusual events.
+- Use "keep sleeping" for clearly routine low-severity events with little impact on environment.
+- Confidence must be between 0 and 100.
 - Output JSON only. No markdown.
+
 """.strip()
 
 
@@ -99,14 +101,14 @@ def claude_triage(event: dict, request_id: str) -> dict:
 
     data = json.loads(text)
 
-    decision = data.get("decision", "ignore")
+    decision = data.get("decision", "Keep Sleeping")
     confidence = float(data.get("confidence", 0.0))
     reason = str(data.get("reason", ""))
 
-    if decision not in {"review", "ignore"}:
+    if decision not in {"Keep Sleeping", "Run"}:
         raise ValueError(f"invalid decision from model: {decision}")
 
-    if confidence < 0 or confidence > 1:
+    if confidence < 0 or confidence > 100:
         raise ValueError(f"invalid confidence from model: {confidence}")
 
     result = {
@@ -181,7 +183,7 @@ def webhook():
             results.append({
                 "event": event,
                 "triage": {
-                    "decision": "ignore",
+                    "decision": "Keep Sleeping",
                     "confidence": 0.0,
                     "reason": f"model_error: {e}",
                 }
